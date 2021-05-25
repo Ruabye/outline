@@ -2,7 +2,10 @@ import matplotlib.pyplot as plt
 import math
 import collections
 from color import color
+import time
+
 MAX_CENTER_POINT = 25
+
 def distence(node1, node2):
     # 计算欧式距离
     return math.sqrt((node1[0] - node2[0]) ** 2 + (node1[1] - node2[1]) ** 2)
@@ -26,14 +29,17 @@ def choseDC(data, dis_dict, dc_wg):
             points.append(d)
     points.sort()
     # 选择dc的真正值
-    dc = points[ int( dc_wg * data_len * (data_len + 1) / 2 ) ]
+    p = int( dc_wg * data_len * (data_len + 1) / 2 )
+    if p < data_len:
+        p = points.count(0)
+    dc = points[p]
+    print("dc为：", dc)
     return dc
 
 
 def calcRho(data, dc, dis_dict):
     # 获得归一化后的ρ
-    # dc = 1001170.2715382634
-    # dc = 766184.031064339 #95%
+
     data_len = len(data)
     # 附上初始值
     rho = [0] * data_len
@@ -92,11 +98,26 @@ def getClusterCenter(rho, delta, data):
     plt.subplot(2, 1, 1)
     plt.scatter(range(1, len(sort_rd) + 1), sort_rd, s=1)
     plt.subplot(2, 1, 2)
-    plt.scatter(range(1, MAX_CENTER_POINT*2+1), sort_rd[:MAX_CENTER_POINT*2], s=1)
+
+    max_center_point = min(MAX_CENTER_POINT, len(sort_rd) // 2)
+    plt.scatter(range(1, max_center_point*2 + 1), sort_rd[:max_center_point*2], s=1)
     plt.savefig("tmp.png")
     plt.close()
-    clusterCenter = int( input("图片已保存至本地，输入聚类中心点个数：") )
-    # clusterCenter = 15
+    clusterCenter = max_center_point
+    # 自动计算
+    for i in range(max_center_point):
+        if sort_rd[i]-sort_rd[max_center_point] < 0.01:
+            clusterCenter = i
+            break
+    # 手动输入
+    dis = []
+    for i in range(max_center_point):
+        dis.append(sort_rd[i] - sort_rd[max_center_point])
+    print(dis)
+    # clusterCenter = int( input("图片已保存至本地，输入聚类中心点个数：") )
+
+    print("聚类中心点个数为：", clusterCenter)
+
     centerPoint = []
     # 计算聚类中心的点的坐标
     for i in range(clusterCenter):
@@ -111,6 +132,7 @@ def cluster(rho, delta, data, dis_dict):
     # 计算聚类中心坐标的索引
     centerPoint = getClusterCenter(rho,delta,data)
     divide_dict = collections.defaultdict(dict)
+    divide_dict_num = collections.defaultdict(list)
     for i in range(len(centerPoint)):
         divide_dict[i]["x"] = []
         divide_dict[i]["y"] = []
@@ -121,17 +143,39 @@ def cluster(rho, delta, data, dis_dict):
         index = dists.index(min(dists))
         divide_dict[index]["x"].append(data[d][0])
         divide_dict[index]["y"].append(data[d][1])
-    return centerPoint, divide_dict
+        divide_dict_num[index].append(d)
+    return centerPoint, divide_dict, divide_dict_num
 
+
+def DPC(data):
+    # 存储任意两点间的位置
+    dis_dict = {}
+    dc = choseDC(data, dis_dict, dc_wg=0.01)
+    rho = calcRho(data, dc, dis_dict)
+    delta = calcDelta(rho, data, dis_dict)
+
+    # 划分聚类
+    centerPoint, divide_dict, divide_dict_num = cluster(rho, delta, data, dis_dict)
+
+    plt.clf()
+    i = 0
+    for k in divide_dict.keys():
+        # 输出各聚类中心的坐标以及聚类下点的个数
+        print(data[centerPoint[k]], ": ", len(divide_dict[k]["x"]))
+        plt.scatter(divide_dict[k]["x"], divide_dict[k]["y"], s=1, c=color[i])
+        i += 1
+    for i in centerPoint:
+        plt.scatter([data[i][0]], [data[i][1]], s=10, c="red")
+    plt.savefig(str(time.time()) + ".png")
+    return centerPoint, divide_dict_num
 
 
 if __name__ == "__main__":
-    data = getTestData("3.txt")
+    data = getTestData("1.txt")
 
     # 存储任意两点间的位置
     dis_dict = {}
     dc = choseDC(data, dis_dict, dc_wg = 0.01)
-    print(dc)
     rho = calcRho(data, dc, dis_dict)
     delta = calcDelta(rho, data, dis_dict)
 
